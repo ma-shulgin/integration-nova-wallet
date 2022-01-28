@@ -1,19 +1,12 @@
-import {EventContext, StoreContext} from '@subsquid/hydra-common'
+import {EventHandlerContext} from '@subsquid/substrate-processor'
 import {convertAddress, eventId} from "./helpers/common";
 import { getOrCreate } from './helpers/helpers';
-import { EraValidatorInfo, IndividualExposure } from '../generated/model';
+import { EraValidatorInfo, IndividualExposure } from '../model/generated';
 import { apiService } from './helpers/api';
 
-export async function handleStakersElected({
-    store,
-    event,
-    block,
-    extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
-    await handleNewEra({store,
-        event,
-        block,
-        extrinsic})
+export async function handleStakersElected(ctx: EventHandlerContext): Promise<void> {
+    ctx.event.name = 'staking.StakingElection';
+    await handleNewEra(ctx);
 }
 
 export async function handleNewEra( {
@@ -21,7 +14,7 @@ export async function handleNewEra( {
     event,
     block,
     extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
+  }: EventHandlerContext): Promise<void> {
     const apiAt = await apiService(block.hash)
     let era = ((await apiAt.query.staking.currentEra()).toJSON())
     let currentEra = typeof era === 'number' ? era : -1

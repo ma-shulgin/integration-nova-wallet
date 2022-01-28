@@ -1,16 +1,16 @@
 import {
-  DatabaseManager,
-  ExtrinsicContext,
-  StoreContext,
+  Store,
+  ExtrinsicHandlerContext,
   SubstrateBlock,
-} from "@subsquid/hydra-common";
+  BlockHandlerContext
+} from "@subsquid/substrate-processor";
 import {
   AccountHistory,
   Extrinsic,
   ExtrinsicItem,
   Transfer,
   TransferItem,
-} from "../generated/model";
+} from "../model/generated";
 import {
   calculateFee,
   extrinsicIdFromBlockAndIdx,
@@ -30,7 +30,7 @@ import {
 export async function handleHistoryElement({
   store,
   block,
-}: ExtrinsicContext & StoreContext): Promise<void> {
+}: BlockHandlerContext): Promise<void> {
   const extrinsics = await allBlockExtrinsics(block.height);
   const allExtrinsic = removeBlackListedExtrinsic(extrinsics)
   if(allExtrinsic.length == 0){
@@ -77,7 +77,7 @@ async function saveFailedTransfer(
   extrinsic: BlockExtrinisic,
   fees: mapExtrinisicToFees,
   block: SubstrateBlock,
-  store: DatabaseManager
+  store: Store
 ): Promise<void> {
   let promises = transfers.map(async (transfer) => {
     transfer.fee = calculateFee(
@@ -128,7 +128,7 @@ async function saveExtrinsic(
   extrinsic: BlockExtrinisic,
   fees: mapExtrinisicToFees,
   block: SubstrateBlock,
-  store: DatabaseManager
+  store: Store
 ): Promise<void> {
   let blockNumber = block.height;
   let extrinsicIdx = extrinsic.id;
@@ -163,7 +163,7 @@ async function saveExtrinsic(
   element.item = new ExtrinsicItem({
     extrinsic: newExtrinsic,
   });
-  return store.save(element);
+  await store.save(element);
 }
 
 /// Success Transfer emits Transfer event that is handled at Transfers.ts handleTransfer()
@@ -171,7 +171,7 @@ async function findFailedTransferCalls(
   extrinsic: BlockExtrinisic,
   fees: mapExtrinisicToFees,
   block: SubstrateBlock,
-  store: DatabaseManager
+  store: Store
 ): Promise<Transfer[] | null> {
 
   const success = isExtrinisicSuccess(extrinsic)

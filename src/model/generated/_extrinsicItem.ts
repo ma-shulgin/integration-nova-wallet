@@ -1,6 +1,6 @@
 import assert from "assert"
-import * as marshal from "../marshal"
-import {Extrinsic} from "./extrinsic"
+import * as marshal from "./marshal"
+import {Extrinsic} from "./_extrinsic"
 
 export class ExtrinsicItem {
   public readonly isTypeOf = 'ExtrinsicItem'

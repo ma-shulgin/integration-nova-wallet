@@ -1,9 +1,9 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_} from "typeorm"
-import * as marshal from "../marshal"
+import * as marshal from "./marshal"
 
 @Entity_()
-export class AccumulatedReward {
-  constructor(props?: Partial<AccumulatedReward>) {
+export class AccumulatedStake {
+  constructor(props?: Partial<AccumulatedStake>) {
     Object.assign(this, props)
   }
 

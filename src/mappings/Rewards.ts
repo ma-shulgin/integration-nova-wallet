@@ -4,15 +4,15 @@ import {
     AccountHistory,
     RewardItem,
     SlashItem,
-  } from "../generated/model";
+  } from "../model/generated";
   import {
-    DatabaseManager,
-    EventContext,
-    StoreContext,
+    Store,
+    EventHandlerContext,
+    ExtrinsicHandlerContext,
     SubstrateBlock,
     SubstrateEvent,
     SubstrateExtrinsic,
-  } from "@subsquid/hydra-common";
+  } from "@subsquid/substrate-processor";
   import {
       callFromProxy,
       callsFromBatch,
@@ -29,7 +29,8 @@ import {
     handleSlashForAnalytics,
   } from "./StakeChanged";
   import { cachedRewardDestination, cachedController } from "./helpers/Cache";
-  import { Staking } from "../types";
+  import { StakingRewardedEvent, StakingRewardEvent} from "../types/events"
+  import { StakingPayoutStakersCall, StakingPayoutNominatorCall, StakingPayoutValidatorCall} from "../types/calls"
   import { allBlockEvents, apiService, allBlockExtrinsics, BlockExtrinisic, BlockEvent } from "./helpers/api";
 import { get } from "./helpers/helpers";
 
@@ -53,65 +54,48 @@ function isPayoutValidator(extrinisic: SubstrateExtrinsic): boolean {
 //     return [validator, era]
 // }
 
-function extractArgsFromPayoutStakers(extrinisic: SubstrateExtrinsic): [string, number] {
-    let params = new Staking.Payout_stakersCall(extrinisic);
-    let era = params.era.toNumber();
-    let validator = params.validator_stash.toString();
-    return [validator, era]
+function eventToExtrCtx(ctx: EventHandlerContext, extr_: SubstrateExtrinsic) : ExtrinsicHandlerContext {
+    let extrCtx : ExtrinsicHandlerContext = { 
+        extrinsic : extr_,
+        event : ctx.event,
+        store : ctx.store,
+        block : ctx.block,
+        _chain : ctx._chain
+    };
+    return extrCtx;
 }
 
-function extractArgsFromPayoutValidator(extrinisic: SubstrateExtrinsic, sender: string): [string, number] {
-    let params = new Staking.Payout_validatorCall(extrinisic);
-    let era = params.era.toNumber();
 
+function extractArgsFromPayoutStakers(ctx: ExtrinsicHandlerContext): [string, number] {
+    let callObj = new StakingPayoutStakersCall(ctx);
+    let {validatorStash,era} = callObj.asV1058
+    return [validatorStash.toString(), era]
+}
+
+function extractArgsFromPayoutValidator(ctx: ExtrinsicHandlerContext, sender: string): [string, number] {
+    let callObj = new StakingPayoutValidatorCall(ctx);
+    let {era} = callObj.asV1050
     return [sender, era]
 }
 
-export async function handleRewarded({
-    store,
-    event,
-    block,
-    extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
-    await handleReward({
-        store,
-        event,
-        block,
-        extrinsic,
-      })
+export async function handleRewarded(ctx : EventHandlerContext ): Promise<void> {
+    ctx.event.name = 'staking.Reward';
+    await handleReward(ctx);
 }
 
-export async function handleReward({
-    store,
-    event,
-    block,
-    extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
+export async function handleReward(ctx: EventHandlerContext ): Promise<void> {
   // keep track of stake changes that is happening
   // for addresses across block
-    await handleRewardRestakeForAnalytics({
-        store,
-        event,
-        block,
-        extrinsic,
-      });
-
-    await handleRewardForTxHistory({
-        store,
-        event,
-        block,
-        extrinsic,
-      });
-    await updateAccumulatedReward(store, event, true)
+    await handleRewardRestakeForAnalytics(ctx);
+    await handleRewardForTxHistory(ctx);
+    await updateAccumulatedReward(ctx, true)
     // }
 }
 
-async function handleRewardForTxHistory({
-    store,
-    event,
-    block,
-    extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
+async function handleRewardForTxHistory(ctx: EventHandlerContext): Promise<void> {
+    
+    let { store, event, block, extrinsic} = ctx;
+    
     let element = await get(store, AccountHistory, eventId(event))
 
     if (element !== undefined) {
@@ -128,8 +112,9 @@ async function handleRewardForTxHistory({
     // all payouts starts with a payout call with the validator stash
     // the stash address would be mapped to all the nominees as the validator address
 
+
     let payoutCallsArgs = allExtrinsics
-        .map(extrinsic => determinePayoutCallsArgs(extrinsic,convertAddressToSubstrate(extrinsic.signer.toString())))
+        .map(extrinsic => determinePayoutCallsArgs(ctx,extrinsic,convertAddressToSubstrate(extrinsic.signer.toString())))
         .filter(args => args.length != 0)
         .flat()
 
@@ -147,9 +132,11 @@ async function handleRewardForTxHistory({
         if (
             eventRecord.section == event.section && 
             eventRecord.method == event.method) {
-            const [account, amount] = new Staking.RewardedEvent(eventRecord as unknown as SubstrateEvent).params;
-
-            let accountAddress = convertAddressToSubstrate(account.toString())
+            
+            ctx.event = eventRecord;
+            ctx.event.name == 'staking.Rewarded';
+            const [account, amount] = new StakingRewardedEvent(ctx).asV9090;
+            let accountAddress = convertAddressToSubstrate(account.toString());
             let rewardDestination = await cachedRewardDestination(
                 accountAddress,
                  eventRecord as unknown as SubstrateEvent,
@@ -174,7 +161,7 @@ async function handleRewardForTxHistory({
 
     await buildRewardEvents(
         block,
-        store,
+        ctx,
         extrinsic,
         event.method,
         event.section || '',
@@ -212,11 +199,12 @@ async function handleRewardForTxHistory({
     )
 }
 
-function determinePayoutCallsArgs(causeCall: BlockExtrinisic, sender: string) : [string, number][] {
+function determinePayoutCallsArgs(ctx: EventHandlerContext, causeCall: BlockExtrinisic, sender: string) : [string, number][] {
+    let extrCtx = eventToExtrCtx(ctx, causeCall);
     if (isPayoutStakers(causeCall)) {
-        return [extractArgsFromPayoutStakers(causeCall)]
+        return [extractArgsFromPayoutStakers(extrCtx)]
     } else if (isPayoutValidator(causeCall)) {
-        return [extractArgsFromPayoutValidator(causeCall, sender)]
+        return [extractArgsFromPayoutValidator(extrCtx, sender)]
     }
     // else if (isPayoutNominator(causeCall)) {
     //         return [extractArgsFromPayoutValidator(causeCall, sender)]
@@ -224,7 +212,7 @@ function determinePayoutCallsArgs(causeCall: BlockExtrinisic, sender: string) : 
     else if (isBatch(causeCall)) {
         return callsFromBatch(causeCall)
             .map((call:any) => {
-                return determinePayoutCallsArgs(call, sender)
+                return determinePayoutCallsArgs(ctx,call, sender)
                     .map((value, index, array) => {
                         return value
                     })
@@ -232,54 +220,31 @@ function determinePayoutCallsArgs(causeCall: BlockExtrinisic, sender: string) : 
             .flat()
     } else if (isProxy(causeCall)) {
         let proxyCall = callFromProxy(causeCall)
-        return determinePayoutCallsArgs(proxyCall, sender)
+        return determinePayoutCallsArgs(ctx,proxyCall, sender)
     } else {
         return []
     }
 }
 
-export async function handleSlashed({
-    store,
-    event,
-    block,
-    extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
-    await handleSlash({
-        store,
-        event,
-        block,
-        extrinsic,
-      })
+export async function handleSlashed(ctx: EventHandlerContext ): Promise<void> {
+    ctx.event.name = 'staking.Slash';
+    await handleSlash(ctx);
 }
 
-export async function handleSlash({
-    store,
-    event,
-    block,
-    extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
-    await handleSlashForAnalytics({
-        store,
-        event,
-        block,
-        extrinsic,
-      })
-    await handleSlashForTxHistory({
-        store,
-        event,
-        block,
-        extrinsic,
-      })
-    await updateAccumulatedReward(store, event, false)
+export async function handleSlash(ctx: EventHandlerContext): Promise<void> {
+    await handleSlashForAnalytics(ctx)
+    await handleSlashForTxHistory(ctx)
+    await updateAccumulatedReward(ctx, false)
   
 }
 
-async function handleSlashForTxHistory({
-    store,
-    event,
-    block,
-    extrinsic,
-  }: EventContext & StoreContext): Promise<void> {
+async function handleSlashForTxHistory(ctx: EventHandlerContext ): Promise<void> {
+    const {
+        store,
+        event,
+        block,
+        extrinsic,
+      } = ctx;
     let isPresent: Array<AccountHistory> = await store.find(
         AccountHistory, // recheck
         {
@@ -313,7 +278,7 @@ async function handleSlashForTxHistory({
 
     await buildRewardEvents(
         block,
-        store,
+        ctx,
         extrinsic,
         event.method,
         event.section || '',
@@ -338,7 +303,7 @@ async function handleSlashForTxHistory({
 
 async function buildRewardEvents<A>(
     block: SubstrateBlock,
-    store: DatabaseManager,
+    ctx: EventHandlerContext,
     extrinsic: SubstrateExtrinsic | undefined,
     eventMethod: String,
     eventSection: String,
@@ -354,7 +319,10 @@ async function buildRewardEvents<A>(
             let [innerAccumulator, currentPromises] = accumulator
 
             if (!(eventRecord.method == eventMethod && eventRecord.section == eventSection)) return accumulator
-            const [account, amount] = new Staking.RewardedEvent(eventRecord as unknown as SubstrateEvent).params;
+            
+            ctx.event = eventRecord;
+            ctx.event.name = 'staking.Rewarded'
+            const [account, amount] = new StakingRewardedEvent(ctx).asV9090;
 
             const newAccumulator = produceNewAccumulator(innerAccumulator, convertAddressToSubstrate(account.toString()))
 
@@ -376,7 +344,7 @@ async function buildRewardEvents<A>(
                 element.extrinsicIdx = extrinsic?.id
             }
             element.item = produceReward(newAccumulator, id, accountAddress, amount.toString())
-            currentPromises.push(store.save(element))
+            currentPromises.push((async (el) : Promise<void> => {ctx.store.save(el)})(element))
 
             return [newAccumulator, currentPromises];
         }, [initialInnerAccumulator, []])
@@ -385,16 +353,15 @@ async function buildRewardEvents<A>(
 }
 
 async function updateAccumulatedReward(
-    store: DatabaseManager,
-    event: SubstrateEvent,
+    ctx: EventHandlerContext,
     isReward: boolean
   ): Promise<void> {
     // For both reward and slash, the params are parsed the same way
-    const [accountId, amount] = new Staking.RewardedEvent(event).params;
-  
+    ctx.event.name = 'staking.Rewarded';
+    const [accountId, amount] = new StakingRewardedEvent(ctx).asV9090;
     let accountAddress = convertAddress(accountId.toString());
   
-    let accumulatedReward = await store.get(AccumulatedReward, {
+    let accumulatedReward = await ctx.store.get(AccumulatedReward, {
       where: { id: accountAddress },
     });
   
@@ -404,9 +371,9 @@ async function updateAccumulatedReward(
       });
       accumulatedReward.amount = BigInt(0);
     }
-    const newAmount = (amount as Balance).toBigInt();
+    const newAmount = amount;
     accumulatedReward.amount =
       accumulatedReward.amount + (isReward ? newAmount : -newAmount);
-    await store.save(accumulatedReward);
+    await ctx.store.save(accumulatedReward);
   }
   

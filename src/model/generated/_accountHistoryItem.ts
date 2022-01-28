@@ -1,7 +1,7 @@
-import {RewardItem} from "./rewardItem"
-import {ExtrinsicItem} from "./extrinsicItem"
-import {TransferItem} from "./transferItem"
-import {SlashItem} from "./slashItem"
+import {RewardItem} from "./_rewardItem"
+import {ExtrinsicItem} from "./_extrinsicItem"
+import {TransferItem} from "./_transferItem"
+import {SlashItem} from "./_slashItem"
 
 export type AccountHistoryItem = RewardItem | ExtrinsicItem | TransferItem | SlashItem
 

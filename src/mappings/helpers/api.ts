@@ -23,7 +23,7 @@ export interface BlockEvent {
   params: any;
   name : string;
   indexInBlock : any;
-  blockNumber : string;
+  blockNumber : number;
   blockTimestamp: any;
   extrinsicId?: string
 }
@@ -39,7 +39,7 @@ export interface BlockExtrinisic {
   signature:string;
   hash: string;
   name: string;
-  blockNumber : string;
+  blockNumber : number;
   substrate_events :[{
     name: string;
     id: string

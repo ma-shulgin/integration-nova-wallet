@@ -1,4 +1,4 @@
-import {  SubstrateEvent,SubstrateBlock } from '@subsquid/hydra-common'
+import {  SubstrateEvent,SubstrateBlock } from '@subsquid/substrate-processor'
 import {blockNumber, convertAddress} from "./common";
 import {AccountId} from "@polkadot/types/interfaces";
 import {RewardDestination} from "@polkadot/types/interfaces/staking";

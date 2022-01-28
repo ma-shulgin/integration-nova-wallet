@@ -1,5 +1,5 @@
 import assert from "assert"
-import * as marshal from "../marshal"
+import * as marshal from "./marshal"
 
 export class IndividualExposure {
   private _who!: string

@@ -1,6 +1,6 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_} from "typeorm"
-import * as marshal from "../marshal"
-import {AccountHistoryItem, fromJsonAccountHistoryItem} from "./accountHistoryItem"
+import * as marshal from "./marshal"
+import {AccountHistoryItem, fromJsonAccountHistoryItem} from "./_accountHistoryItem"
 
 @Entity_()
 export class AccountHistory {

@@ -1,12 +1,13 @@
 
-import { DatabaseManager } from '@subsquid/hydra-common'
+import { Store } from '@subsquid/substrate-processor'
+
 export async function getOrCreate<T extends {id: string}>(
-    store: DatabaseManager,
+    store: Store,
     entityConstructor: EntityConstructor<T>,
     id: string
   ): Promise<T> {
   
-    let e = await store.get(entityConstructor, {
+    let e = await store.get<T>(entityConstructor, {
       where: { id },
     })
   
@@ -20,12 +21,12 @@ export async function getOrCreate<T extends {id: string}>(
 
 
   export async function get<T extends {id: string}>(
-    store: DatabaseManager,
+    store: Store,
     entityConstructor: EntityConstructor<T>,
     id: string
   ): Promise<T | undefined> {
   
-    let e = await store.get(entityConstructor, {
+    let e = await store.get<T>(entityConstructor, {
       where: { id },
     })
   

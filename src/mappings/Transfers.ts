@@ -1,14 +1,12 @@
 import {
-  DatabaseManager,
-  EventContext,
-  StoreContext,
+  EventHandlerContext,
   SubstrateBlock,
   SubstrateEvent,
   SubstrateExtrinsic,
-} from "@subsquid/hydra-common";
+} from "@subsquid/substrate-processor";
 
-import {  AccountHistory, Transfer, TransferItem } from '../generated/model';
-import { Balances } from '../types'
+import {  AccountHistory, Transfer, TransferItem } from '../model/generated';
+import { BalancesDepositEvent, BalancesTransferEvent } from '../types/events'
 import {
   blockNumber,
   calculateFee,
@@ -20,14 +18,40 @@ import {
 import { getOrCreate } from "./helpers/helpers";
 import { BlockExtrinisic } from './helpers/api';
 import { ADDRESS_PREFIX } from "../constants";
+import { from } from "rxjs";
 
-export async function handleTransfer({
-  store,
-  event,
-  block,
-  extrinsic,
-}: EventContext & StoreContext): Promise<void> {
-  const [from, to, value] = new Balances.TransferEvent(event).params
+function getTransferDetails(eventObj:BalancesTransferEvent):{from: string,to: string, amount: bigint} {
+  if (eventObj.isV1020) {
+    const [fromUA,toUA,amount,] = eventObj.asV1020
+    const from = fromUA.toString();
+    const to = toUA.toString();
+    return {from,to,amount}
+  }
+  else if (eventObj.isV1050) {
+      const [fromUA,toUA,amount] = eventObj.asV1050
+      const from = fromUA.toString();
+      const to = toUA.toString();
+      return {from,to,amount};
+  }
+  else {
+    const res = eventObj.asV9130;
+    const from = res.from.toString();
+    const to = res.to.toString();
+    const amount = res.amount;
+    return {from,to, amount};
+}
+}
+
+export async function handleTransfer( ctx: EventHandlerContext): Promise<void> {
+  const {
+    store,
+    event,
+    block,
+    extrinsic,
+  } = ctx;
+  
+  const evObj = new BalancesTransferEvent(ctx);
+  const {from, to, amount} = getTransferDetails(evObj);
 
   const elementFrom = await getOrCreate(
     store,
@@ -35,7 +59,7 @@ export async function handleTransfer({
     eventId(event) + `-from`
   );
   elementFrom.address = convertAddress(from.toString());
-  await populateTransfer(elementFrom, event, block, extrinsic, store);
+  await populateTransfer(elementFrom, ctx);
 
   const elementTo = await getOrCreate(
     store,
@@ -43,32 +67,31 @@ export async function handleTransfer({
     eventId(event) + `-to`
   );
   elementTo.address = convertAddress(to.toString());
-  await populateTransfer(elementTo, event, block, extrinsic, store);
+  await populateTransfer(elementTo,ctx);
 }
 
-export async function handleTransferKeepAlive({
-  store,
-  event,
-  block,
-  extrinsic,
-}: EventContext & StoreContext): Promise<void> {
-  await handleTransfer({ store, event, block, extrinsic });
-}
+// export async function handleTransferKeepAlive({
+//   store,
+//   event,
+//   block,
+//   extrinsic,
+// }: EventContext): Promise<void> {
+//   await handleTransfer({ store, event, block, extrinsic });
+// }
 
 async function populateTransfer(
   element: AccountHistory,
-  event: SubstrateEvent,
-  block: SubstrateBlock,
-  extrinsic: SubstrateExtrinsic | undefined,
-  store: DatabaseManager
+  ctx : EventHandlerContext
 ): Promise<void> {
+  const {event, block, extrinsic, store} = ctx;
   element.timestamp = timestampToDate(block);
   element.blockNumber = blockNumber(event);
   if (extrinsic !== undefined && extrinsic !== null) {
     element.extrinsicHash = extrinsic.hash;
     element.extrinsicIdx = extrinsic.id;
   }
-  const [from, to, value] = new Balances.TransferEvent(event).params
+  const evObj = new BalancesTransferEvent(ctx);
+  const {from, to, amount} = getTransferDetails(evObj);
   const fees = await feeEventsToExtrinisicMap(block.height);
   let transfer: Transfer | undefined = await store.get(Transfer, {
     where: { extrinisicIdx: extrinsic?.id },
@@ -81,7 +104,7 @@ async function populateTransfer(
     console.error(`extrinisic id undefined for transfer with event id = ${event.id}.Skipping it `)
     return
   }
-  transfer.amount = value.toString();
+  transfer.amount = amount.toString();
   transfer.from = convertAddress(from.toString());
   transfer.to =  convertAddress(to.toString())
   transfer.fee = calculateFee(extrinsic as BlockExtrinisic,fees);

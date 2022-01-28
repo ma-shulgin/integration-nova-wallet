@@ -1,0 +1,24 @@
+{
+  "outDir": "src/types",
+  "chainVersions": "kusamaVersions.json",
+  "typesBundle": "kusama",
+  "events": [
+    "balances.Transfer",
+    "balances.Deposit",
+    "treasury.Deposit",
+    "staking.Reward",
+    "staking.StakingElection",
+    "staking.Slash",
+    "staking.StakersElected",
+    "staking.Rewarded",
+    "staking.Slashed",
+    "staking.Bonded",
+    "staking.Unbonded"
+  ],
+  "calls": [
+    "timestamp.set",
+    "staking.payout_stakers",
+    "staking.payout_validator",
+    "staking.payout_nominator"
+  ]
+}

@@ -1,5 +1,5 @@
 import assert from "assert"
-import * as marshal from "../marshal"
+import * as marshal from "./marshal"
 import {Transfer} from "./transfer.model"
 
 export class TransferItem {

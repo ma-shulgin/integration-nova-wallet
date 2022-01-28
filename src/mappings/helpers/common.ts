@@ -1,4 +1,4 @@
-import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subsquid/hydra-common'
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subsquid/substrate-processor'
 import { encodeAddress } from "@polkadot/util-crypto";
 import { BlockEvent,allBlockEvents, BlockExtrinisic } from './api';
 import { mapExtrinisicToFees } from './helpers';
@@ -37,9 +37,8 @@ export function constructCache<T extends BlockExtrinisic| BlockEvent>(
     return cache
   }
 
-export function convertAddressToSubstrate(address: string) : string {
-    return encodeAddress(address, 42);
-}
+export const convertAddressToSubstrate = convertAddress;
+
 export function isBatch(call:BlockExtrinisic) : boolean {
     return call.section == "utility" && batchCalls.includes(call.method)
 }

@@ -1,6 +1,6 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_} from "typeorm"
-import * as marshal from "../marshal"
-import {IndividualExposure} from "./individualExposure"
+import * as marshal from "./marshal"
+import {IndividualExposure} from "./_individualExposure"
 
 @Entity_()
 export class EraValidatorInfo {

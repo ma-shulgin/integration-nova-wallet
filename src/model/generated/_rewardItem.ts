@@ -1,6 +1,6 @@
 import assert from "assert"
-import * as marshal from "../marshal"
-import {Reward} from "./reward"
+import * as marshal from "./marshal"
+import {Reward} from "./_reward"
 
 export class RewardItem {
   public readonly isTypeOf = 'RewardItem'
